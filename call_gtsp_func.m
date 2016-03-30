@@ -92,7 +92,7 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
     % there is a removal of edges in this also; which is different from above as
     % this removes all intracluster edges regardless of parent cluster
     % relationship..
-    A_clus_ineq = zeros(length(V_Cluster),(length(V_comp_upper)^2 + length(V_comp_upper)));
+    A_clus_ineq = (sparse(length(Cluster_to_node),(length(V_comp_upper)^2 + length(V_comp_upper))));
     [X,Y] = meshgrid(1:length(V_comp_upper),1:length(V_comp_upper));
     for i = 1:length(Cluster_to_node)
         V_comp_clus = V_comp_upper;
@@ -135,18 +135,18 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
 
     %
 
-    counter_max = 2^length(V_comp_upper) -1 -3 -1; % length(V_comp_upper)*%subtracting nc0 nc1 ncn % the counting is wrong because right one is (n*nc0 + (n-1)nc1 + ...+ 0*ncn) but we are doing n*(nc0 + nc1 + ...+ ncn)--- r changes 
+    counter_max = length(V_comp_upper)*2^length(V_comp_upper) -1 -3 -1; % length(V_comp_upper)*%subtracting nc0 nc1 ncn % the counting is wrong because right one is (n*nc0 + (n-1)nc1 + ...+ 0*ncn) but we are doing n*(nc0 + nc1 + ...+ ncn)--- r changes 
 
-    A_subset  = zeros(counter_max,(length(V_comp_upper)^2 + length(V_comp_upper)));
+    A_subset  = (sparse(counter_max,(length(V_comp_upper)^2 + length(V_comp_upper))));
 
-    B_subset  = zeros(counter_max, 1);
+    B_subset  = (zeros(counter_max, 1));
     mask_edge_comb = zeros(length(V_comp_upper));
     counter = 1;
 
 
     for j = 2:(length(V_comp_upper)-1)
 
-        nodes_comb = nchoosek(1:length(V_comp_upper),j);
+        nodes_comb = nchoosek(1:length(V_comp_upper),j); % check all combination of edges in current subset of nodes selected
         for k = 1:length(nodes_comb)
             edge_comb = nchoosek(nodes_comb(k,:),2); %edges out of selected nodes each row of nodes_comb can be used to make edges [3 nodes make 3 edges (3C2)]
             ind_edge_comb = sub2ind(size(V_comp_upper),edge_comb(:,1), edge_comb(:,2));
@@ -156,8 +156,10 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
             for l = 1:length(node_notin_subset)
                 node_notsol = zeros(1,length(V_comp_upper)); % nodes not in solution
                 node_notsol(node_notin_subset(l)) = 1;
-                A_subset(counter,:) = horzcat(adj_V_comp_A(:)', node_notsol);
-                B_subset(counter,:) = j;        
+%                 A_subset(counter, 1:length(adj_V_comp_A)^2) = adj_V_comp_A(:)';
+%                 A_subset(counter,(length(V_comp_upper)^2+1):end) = node_notsol;
+                A_subset(counter,:) = [adj_V_comp_A(:)' node_notsol];
+                B_subset(counter,:) = j;                        
                 counter = counter + 1;
             end
 

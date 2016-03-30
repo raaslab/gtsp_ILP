@@ -1,3 +1,4 @@
+    tic;
     targets_x = guard_target_struct.targets_x; % 
     targets_y = guard_target_struct.targets_y; % 
     
@@ -43,3 +44,4 @@
     
        
     [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V_adj);
+    toc;
