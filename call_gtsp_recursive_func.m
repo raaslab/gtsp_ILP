@@ -1,4 +1,4 @@
-function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V_adj)
+function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_recursive_func(V_Cluster, V_adj)
     
    
     
@@ -13,7 +13,7 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
 
     G_orig = graph(V_adj,node_name);
     
-    figure;
+%     figure;
 %     plot(G_orig, 'EdgeLabel', G_orig.Edges.Weight);
 
     
@@ -22,7 +22,7 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
     V_comp = distances(G_orig, 1:length(V_adj),1:length(V_adj));
     V_comp_upper = triu(V_comp); % keeping the upper triangular matrix
 
-    figure;
+    % figure;
     G_comp = graph(V_comp_upper, node_name,'upper');
     G_comp.Nodes.Cluster = V_Cluster;
 %     plot(G_comp, 'EdgeLabel', G_comp.Edges.Weight);
@@ -143,60 +143,79 @@ function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V
     Beq = Beq_continuity;
 
     %%
-
-    %
-
-    counter_max = length(V_comp_upper)*2^length(V_comp_upper) -1 -3 -1; % length(V_comp_upper)*%subtracting nc0 nc1 ncn % the counting is wrong because right one is (n*nc0 + (n-1)nc1 + ...+ 0*ncn) but we are doing n*(nc0 + nc1 + ...+ ncn)--- r changes 
-
-    A_subset  = (sparse(counter_max,(length(V_comp_upper)^2 + length(V_comp_upper))));
-
-    B_subset  = (zeros(counter_max, 1));
-    mask_edge_comb = sparse(length(adj_V_comp_upper), length(adj_V_comp_upper));
-    counter = 1;
-    adj_V_comp_A = sparse(length(adj_V_comp_upper), length(adj_V_comp_upper));
-
-    for j = 2:(length(V_comp_upper)-1)
-
-        nodes_comb = nchoosek(1:length(V_comp_upper),j); % check all combination of edges in current subset of nodes selected
-        for k = 1:length(nodes_comb)
-            edge_comb = nchoosek(nodes_comb(k,:),2); %edges out of selected nodes each row of nodes_comb can be used to make edges [3 nodes make 3 edges (3C2)]
-            ind_edge_comb = sub2ind(size(V_comp_upper),edge_comb(:,1), edge_comb(:,2));
-            mask_edge_comb(ind_edge_comb) = 1;
-            adj_V_comp_A = adj_V_comp_upper.*(mask_edge_comb);
-            node_notin_subset = find(~ismember(1:length(V_comp_upper), unique(edge_comb))); % nodes not in subset 
-           
-            
-            for l = 1:length(node_notin_subset)                
-%                 A_subset(counter, 1:length(adj_V_comp_A)^2) = adj_V_comp_A(:)';
-%                 A_subset(counter,(length(V_comp_upper)^2+1):end) = node_notsol;
-                node_notsol = sparse(1,length(V_comp_upper)); % nodes not in solution
-                node_notsol(node_notin_subset(l)) = 1;
-                A_subset(counter,:) = [adj_V_comp_A(:)' node_notsol];
-                B_subset(counter,:) = j;                        
-                counter = counter + 1;
-            end
-
-            mask_edge_comb = zeros(length(V_comp_upper));
-        end
-
-    end
-
-    A  = [A_subset(1:(counter-1),:);A_clus_ineq]; % removing empty ones and attaching the cluster
-    B  = [B_subset(1:(counter-1),:);B_clus_ineq];
-
-
+    
     lb = zeros(length(V_comp_upper)^2+length(V_comp_upper), 1);
     ub = [double(adj_V_comp_upper(:)); ones(length(V_comp_upper),1)];
-
-
+    
     options = optimoptions('intlinprog','Display','off');
     problem = struct('f',f,'intcon',intcon,...
-        'Aineq',A,'bineq',B,'Aeq',Aeq,'beq',Beq,...
+        'Aineq',A_clus_ineq,'bineq',B_clus_ineq,'Aeq',Aeq,'beq',Beq,...
         'lb',lb,'ub',ub,'options',options,...
         'solver','intlinprog');
 
     [x,fval,exitflag,output]  = intlinprog(problem);
-    %V_eq_clus(~ismember(1:8, [1 2 4]), :) = 0
+    
+    
+    tours = detectSubtours(x(1:length(V_comp_upper)^2), [Y(:) X(:)]);
+    numtours = length(tours); % number of subtours
+    fprintf('# of subtours: %d\n',numtours);
+    
+    %%
+    A = A_clus_ineq; % Allocate a sparse linear inequality constraint matrix
+    B = B_clus_ineq;
+    adj_V_comp_A = sparse(length(adj_V_comp_upper), length(adj_V_comp_upper));
+    mask_edge_comb = sparse(length(adj_V_comp_upper), length(adj_V_comp_upper));
+    
+    counter = size(A_clus_ineq,1) + 1;
+    
+    while numtours > 1 % repeat until there is just one subtour
+        B = [B;zeros(numtours,1)]; % allocate b
+        A = [A;spalloc(numtours,length(A_clus_ineq),length(intcon))]; % a guess at how many nonzeros to allocate
+        for ii = 1:numtours
+             subTourIdx = tours{ii}; % Extract the current subtour
+    %         The next lines find all of the variables associated with the
+    %         particular subtour, then add an inequality constraint to prohibit
+    %         that subtour and all subtours that use those stops.
+            edge_comb = nchoosek(sort(subTourIdx(:)),2); %edges out of selected nodes each row of nodes_comb can be used to make edges [3 nodes make 3 edges (3C2)]
+            ind_edge_comb = sub2ind(size(V_comp_upper),edge_comb(:,1), edge_comb(:,2));
+            mask_edge_comb(ind_edge_comb) = 1;
+            adj_V_comp_A = adj_V_comp_upper.*(mask_edge_comb);
+            node_notin_subset = find(~ismember(1:length(V_comp_upper), unique(edge_comb)));
+            B = [B;zeros((length(node_notin_subset)-1),1)]; % allocate b again as we have condition for each node not in subset
+            A = [A;spalloc((length(node_notin_subset)-1),length(A_clus_ineq),length(intcon))]; % a guess at how many nonzeros to allocate % allocate a again as we have condition for each node not in subset
+            for l = 1:length(node_notin_subset)
+                node_notsol = sparse(1,length(V_comp_upper)); % nodes not in solution
+                node_notsol(node_notin_subset(l)) = 1;
+                A(counter,:) = [adj_V_comp_A(:)' node_notsol];
+                B(counter,:) = length(tours{ii});                        
+                counter = counter + 1;
+                
+            end
+            mask_edge_comb = zeros(length(V_comp_upper));        
+                
+          
+          
+        end
+        options = optimoptions('intlinprog','Display','off');
+        problem = struct('f',f,'intcon',intcon,...
+        'Aineq',A,'bineq',B,'Aeq',Aeq,'beq',Beq,...
+        'lb',lb,'ub',ub,'options',options,...
+        'solver','intlinprog');
+
+        % Try to optimize again
+        [x,fval,exitflag,output]  = intlinprog(problem);
+
+       
+
+        % How many subtours this time?
+        tours = detectSubtours(x(1:length(V_comp_upper)^2), [Y(:) X(:)]);
+        numtours = length(tours); % number of subtours
+        fprintf('# of subtours: %d\n',numtours);
+    end
+    %%
+    %
+
+   
 
     x_reshape = reshape(x, length(V_comp_upper), []);
 

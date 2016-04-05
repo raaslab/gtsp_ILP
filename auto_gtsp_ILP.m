@@ -43,5 +43,5 @@
     V_adj  = double(guard_mat_weight);
     
        
-    [x_reshape, G_final,fval,exitflag,output] = call_gtsp_func(V_Cluster, V_adj);
+    [x_reshape, G_final,fval,exitflag,output] = call_gtsp_recursive_func(V_Cluster, V_adj);
     toc;

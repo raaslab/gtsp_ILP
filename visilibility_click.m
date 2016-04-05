@@ -26,7 +26,7 @@ epsilon = 0.000000001;
 
 
 %Read environment and guards geometry from files
-environment = read_vertices_from_file('./source_code/example1.environment');
+environment = read_vertices_from_file('./source_code/example2.environment');
 
 
 
