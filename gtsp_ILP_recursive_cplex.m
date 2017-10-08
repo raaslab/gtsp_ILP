@@ -1,6 +1,6 @@
-  function [x_reshape, G_final,fval,exitflag,output] = call_gtsp_recursive_func(V_Cluster, V_adj)
+  function [x_reshape, G_final,fval,exitflag,output] = gtsp_ILP_recursive_cplex(V_Cluster, V_adj)
     
-   
+   addpath('D:\Install_cplex\cplex\matlab\x64_win64');
     
     %%
     
@@ -82,7 +82,7 @@
     node_sel_ind = (length(V_comp_upper)^2+1):(length(V_comp_upper)^2+length(V_comp_upper)); % incorporating the node variables too..needed for {if node visited should also exit and subtour elimination}
 
     intcon = [find(V_comp_upper);node_sel_ind']; %**** doubt is that should we list the other variables or not -> another idea is to use this indexing and just select these variables in the Aeq and A and Beq and B
-
+    
     %%
 
 % ******these conditions do not work properly because of a case when we% don't need to exit a cluster for the whole tour so number of edges exit and enter remains zero for that cluster.
@@ -147,13 +147,22 @@
     lb = zeros(length(V_comp_upper)^2+length(V_comp_upper), 1);
     ub = [double(adj_V_comp_upper(:)); ones(length(V_comp_upper),1)];
     
-    options = optimoptions('intlinprog','Display','off');
-    problem = struct('f',f,'intcon',intcon,...
-        'Aineq',A_clus_ineq,'bineq',B_clus_ineq,'Aeq',Aeq,'beq',Beq,...
-        'lb',lb,'ub',ub,'options',options,...
-        'solver','intlinprog');
-
-    [x,fval,exitflag,output]  = intlinprog(problem);
+%     options = optimoptions('intlinprog','Display','off');
+%     problem = struct('f',f,'intcon',intcon,...
+%         'Aineq',A_clus_ineq,'bineq',B_clus_ineq,'Aeq',Aeq,'beq',Beq,...
+%         'lb',lb,'ub',ub,'options',options,...
+%         'solver','intlinprog');
+% 
+%     [x,fval,exitflag,output]  = intlinprog(problem);
+      options = cplexoptimset;
+      options.Display = 'on';
+      
+      len_ctype = length(lb);
+      ctype(1:len_ctype) = 'C';
+      ctype(intcon) = 'I';
+       
+      [x, fval, exitflag, output] = cplexmilp (f, A_clus_ineq, B_clus_ineq, Aeq, Beq,...
+      [ ], [ ], [ ], lb, ub, ctype, [ ], options);
     
     
     tours = detectSubtours(x(1:length(V_comp_upper)^2), [Y(:) X(:)]);
@@ -196,17 +205,22 @@
           
           
         end
-        options = optimoptions('intlinprog','Display','off');
-        problem = struct('f',f,'intcon',intcon,...
-        'Aineq',A,'bineq',B,'Aeq',Aeq,'beq',Beq,...
-        'lb',lb,'ub',ub,'options',options,...
-        'solver','intlinprog');
-
+%         options = optimoptions('intlinprog','Display','off');
+%         problem = struct('f',f,'intcon',intcon,...
+%         'Aineq',A,'bineq',B,'Aeq',Aeq,'beq',Beq,...
+%         'lb',lb,'ub',ub,'options',options,...
+%         'solver','intlinprog');
+        
+        
+        
         % Try to optimize again
-        [x,fval,exitflag,output]  = intlinprog(problem);
-
+%         [x,fval,exitflag,output]  = intlinprog(problem);
+        options = cplexoptimset;
+        options.Display = 'off';
        
-
+       [x, fval, exitflag, output] = cplexmilp (f, A, B, Aeq, Beq,...
+      [ ], [ ], [ ], lb, ub, ctype, [ ], options);
+        
         % How many subtours this time?
         tours = detectSubtours(x(1:length(V_comp_upper)^2), [Y(:) X(:)]);
         numtours = length(tours); % number of subtours
@@ -220,7 +234,7 @@
     x_reshape = reshape(x, length(V_comp_upper), []);
 
     %% 
-    figure(333); 
+    figure(444); 
     G_final = graph(x_reshape(:,1:(end-1)).*V_comp_upper, store_name,'upper');
     G_final.Nodes.Cluster = V_Cluster;
     plot(G_final, 'EdgeLabel', G_final.Edges.Weight);
@@ -229,5 +243,5 @@
     
 
 end
-
+%60 
 
